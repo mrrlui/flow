@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shek Pai Street Traffic Bottleneck & Queue Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        /* Custom Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            margin-top: -7px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            border: 2px solid #ffffff;
+            transition: transform 0.1s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 999px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-blue-100 selection:text-blue-900">
+
+    <!-- Top Header -->
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        TTA Simulation
+                    </span>
+                    <span class="text-xs text-slate-400">Shek Pai Street (石排街) Single-Lane Roadworks</span>
+                </div>
+                <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1">
+                    Traffic Bottleneck & Queueing Simulator
+                </h1>
+            </div>
+
+            <!-- Preset Scenario Buttons -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button id="btn-preset-default" class="px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm transition active:scale-95 cursor-pointer">
+                    Default Plan (Jam)
+                </button>
+                <button id="btn-preset-optimized" class="px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition active:scale-95 cursor-pointer">
+                    Optimized Peak Plan (Clear)
+                </button>
+                <button id="btn-preset-long" class="px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition active:scale-95 cursor-pointer">
+                    Longer Cycle (90s) Efficiency
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Status Banner (Oversaturated vs Flowing) -->
+        <div id="status-banner" class="rounded-xl p-4 sm:p-5 border transition-colors duration-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm bg-rose-50 border-rose-200 text-rose-950">
+            <div class="flex items-start gap-3">
+                <div id="status-icon" class="p-2.5 rounded-lg bg-rose-600 text-white shrink-0 mt-0.5">
+                    <!-- Warning SVG -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 id="status-title" class="text-base sm:text-lg font-bold">
+                        Oversaturated Bottleneck: Endless Queue Forming
+                    </h2>
+                    <p id="status-desc" class="text-sm mt-0.5 opacity-90">
+                        More cars are arriving (560/hr) than the green light can clear (440/hr). Every cycle leaves cars stranded, causing a snowballing backup.
+                    </p>
+                </div>
+            </div>
+            <div class="shrink-0 bg-white/80 backdrop-blur px-4 py-2 rounded-lg border border-black/5 text-right w-full sm:w-auto">
+                <div class="text-xs font-medium uppercase tracking-wider text-slate-500">Net Queue Change</div>
+                <div id="banner-net-rate" class="text-xl font-extrabold text-rose-600">+2.00 cars / min</div>
+            </div>
+        </div>
+
+        <!-- Main Grid: Left Controls + Right Visuals & Metrics -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- LEFT COLUMN: Interactive Controls (5 cols on lg) -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Traffic & Signal Controls</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Adjust sliders to test how signal timing affects the jam</p>
+                        </div>
+                        <span id="cycle-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                            Cycle: 52s
+                        </span>
+                    </div>
+
+                    <div class="space-y-5">
+                        <!-- Slider 1: Demand -->
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="slider-demand" class="text-sm font-semibold text-slate-800">
+                                    1. Arriving Traffic (Entering Estate)
+                                </label>
+                                <span id="val-demand" class="text-sm font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
+                                    560 cars/hr
+                                </span>
+                            </div>
+                            <input id="slider-demand" type="range" min="200" max="900" step="10" value="560">
+                            <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                                <span>Off-peak (200)</span>
+                                <span>Rush Hour (560)</span>
+                                <span>Heavy Surge (900)</span>
+                            </div>
+                        </div>
+
+                        <!-- Slider 2: Entering Estate Green -->
+                        <div class="p-3.5 rounded-xl bg-blue-50/40 border border-blue-200/70">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="slider-green-in" class="text-sm font-semibold text-slate-800">
+                                    2. Entering Estate Green Light
+                                </label>
+                                <span id="val-green-in" class="text-sm font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                                    16 sec
+                                </span>
+                            </div>
+                            <input id="slider-green-in" type="range" min="6" max="50" step="1" value="16">
+                            <p class="text-[11px] text-slate-500 mt-1">
+                                Main uphill/inbound flow. Needs enough green seconds to drain arriving cars.
+                            </p>
+                        </div>
+
+                        <!-- Slider 3: Leaving Estate Green -->
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="slider-green-out" class="text-sm font-semibold text-slate-800">
+                                    3. Leaving Estate Green Light
+                                </label>
+                                <span id="val-green-out" class="text-sm font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-md border border-slate-200">
+                                    16 sec
+                                </span>
+                            </div>
+                            <input id="slider-green-out" type="range" min="6" max="45" step="1" value="16">
+                            <p class="text-[11px] text-slate-500 mt-1">
+                                Opposite downhill flow sharing the single 26m lane.
+                            </p>
+                        </div>
+
+                        <!-- Slider 4: Lei Pui Street Green -->
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="slider-green-side" class="text-sm font-semibold text-slate-800">
+                                    4. Lei Pui Street (Side Road) Green
+                                </label>
+                                <span id="val-green-side" class="text-sm font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-md border border-slate-200">
+                                    8 sec
+                                </span>
+                            </div>
+                            <input id="slider-green-side" type="range" min="4" max="30" step="1" value="8">
+                            <p class="text-[11px] text-slate-500 mt-1">
+                                Side-street vehicles merging into the bottleneck.
+                            </p>
+                        </div>
+
+                        <!-- Slider 5: All-Red Clearance -->
+                        <div class="p-3.5 rounded-xl bg-amber-50/50 border border-amber-200/80">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="slider-all-red" class="text-sm font-semibold text-slate-800">
+                                    5. All-Red Safety Clearance (Per Switch)
+                                </label>
+                                <span id="val-all-red" class="text-sm font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300">
+                                    4 sec
+                                </span>
+                            </div>
+                            <input id="slider-all-red" type="range" min="2" max="10" step="1" value="4">
+                            <p class="text-[11px] text-slate-600 mt-1">
+                                All 3 directions stay RED between turns so cars clear the 26m single lane safely.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Signal Cycle Breakdown Bar -->
+                    <div class="mt-6 pt-5 border-t border-slate-100">
+                        <div class="flex justify-between items-center text-xs font-semibold text-slate-700 mb-2">
+                            <span>Signal Cycle Composition (<span id="bar-total-sec">52s</span>)</span>
+                            <span id="bar-wasted-pct" class="text-rose-600">23.1% All-Red Dead Time</span>
+                        </div>
+                        <div class="w-full h-5 rounded-lg overflow-hidden flex bg-slate-200 shadow-inner text-[10px] font-bold text-white">
+                            <div id="seg-in" class="bg-emerald-500 flex items-center justify-center transition-all duration-200" style="width: 30.8%;" title="Entering Estate Green">In</div>
+                            <div id="seg-r1" class="bg-rose-500 flex items-center justify-center transition-all duration-200" style="width: 7.7%;" title="All-Red Clearance">R</div>
+                            <div id="seg-out" class="bg-sky-500 flex items-center justify-center transition-all duration-200" style="width: 30.8%;" title="Leaving Estate Green">Out</div>
+                            <div id="seg-r2" class="bg-rose-500 flex items-center justify-center transition-all duration-200" style="width: 7.7%;" title="All-Red Clearance">R</div>
+                            <div id="seg-side" class="bg-indigo-500 flex items-center justify-center transition-all duration-200" style="width: 15.4%;" title="Lei Pui St Green">Side</div>
+                            <div id="seg-r3" class="bg-rose-500 flex items-center justify-center transition-all duration-200" style="width: 7.7%;" title="All-Red Clearance">R</div>
+                        </div>
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-slate-600">
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Entering</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block"></span> Leaving</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-500 inline-block"></span> Lei Pui St</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block"></span> All-Red Buffer (3×)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layman Explanation Box -->
+                <div class="bg-slate-900 text-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Why Does This Happen? (The "Bucket" Math)
+                    </h3>
+                    <div class="mt-3 space-y-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        <p>
+                            <strong class="text-white">1. The Startup Penalty:</strong> Every time a light turns green, drivers take ~2 seconds to react and accelerate. After that, 1 car passes every ~2.2 seconds. So a 16-second green light only has 14 seconds of steady movement (~6.36 cars per cycle).
+                        </p>
+                        <p>
+                            <strong class="text-white">2. The All-Red Tax:</strong> Because 3 directions share one narrow 26m lane, every switch needs an All-Red pause (3 switches per cycle). With a short 52s cycle, <span id="explain-red-pct" class="text-amber-300 font-semibold">23.1%</span> of the entire hour is spent with <em>every light red</em>.
+                        </p>
+                        <p>
+                            <strong class="text-white">3. Why Longer Cycles Help:</strong> Try clicking <em>"Longer Cycle (90s) Efficiency"</em> above. Even without changing the green-light ratios much, fewer light switches per hour means less time wasted on All-Red pauses and driver startup delays!
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: KPIs, Animation, Chart & Table (7 cols on lg) -->
+            <div class="lg:col-span-7 space-y-6">
+
+                <!-- 4 Key Metric Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                    <!-- KPI 1: Cycle Length -->
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <div class="text-xs font-medium text-slate-500">Total Cycle Length</div>
+                        <div id="kpi-cycle" class="text-2xl font-extrabold text-slate-900 mt-1">52s</div>
+                        <div id="kpi-cycles-hr" class="text-[11px] text-slate-500 mt-1">69.2 cycles / hour</div>
+                    </div>
+
+                    <!-- KPI 2: Wasted All-Red Time -->
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <div class="text-xs font-medium text-slate-500">All-Red Lost Time</div>
+                        <div id="kpi-lost-sec" class="text-2xl font-extrabold text-amber-600 mt-1">12s / cycle</div>
+                        <div id="kpi-lost-pct" class="text-[11px] font-semibold text-amber-700 mt-1">23.1% of hour wasted</div>
+                    </div>
+
+                    <!-- KPI 3: Effective Capacity -->
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <div class="text-xs font-medium text-slate-500">Effective Capacity</div>
+                        <div id="kpi-capacity" class="text-2xl font-extrabold text-blue-600 mt-1">441 cars/hr</div>
+                        <div id="kpi-cars-cycle" class="text-[11px] text-slate-500 mt-1">6.36 cars / green</div>
+                    </div>
+
+                    <!-- KPI 4: 60-Min Queue -->
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <div class="text-xs font-medium text-slate-500">Queue After 60 Mins</div>
+                        <div id="kpi-queue-60" class="text-2xl font-extrabold text-rose-600 mt-1">119 cars</div>
+                        <div id="kpi-meters-60" class="text-[11px] font-semibold text-rose-700 mt-1">~774 meters long</div>
+                    </div>
+                </div>
+
+                <!-- Live Bottleneck Visual Animation -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Live Single-Lane Bottleneck View</h3>
+                            <p class="text-xs text-slate-500">Visualizing the 26-meter single-lane work zone on Shek Pai Street (4× speed)</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span id="sim-phase-badge" class="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                ENTERING ESTATE: GREEN
+                            </span>
+                            <button id="btn-reset-sim" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer">
+                                Reset Cars
+                            </button>
+                        </div>
+                    </div>
+                    <div class="relative w-full h-56 sm:h-64 bg-slate-800">
+                        <canvas id="bottleneck-canvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- 60-Minute Queue Growth Chart -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">60-Minute Queue Projection</h3>
+                            <p class="text-xs text-slate-500">Estimated waiting vehicles & physical backup distance over 1 hour</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <span class="flex items-center gap-1.5 font-medium text-slate-600">
+                                <span class="w-3 h-0.5 bg-amber-500 inline-block"></span> Gridlock Spillback (~350m)
+                            </span>
+                        </div>
+                    </div>
+                    <div class="relative w-full h-56 sm:h-64">
+                        <canvas id="chart-canvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Milestone Breakdown Table (15, 30, 45, 60 mins) -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-slate-100">
+                        <h3 class="text-base font-bold text-slate-900">Hour-Long Cumulative Impact Breakdown</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Assuming an average vehicle spacing of 6.5 meters (mix of private cars, minibuses, and buses)</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                                    <th class="py-3 px-4">Time Elapsed</th>
+                                    <th class="py-3 px-4">Total Arrived</th>
+                                    <th class="py-3 px-4">Total Cleared</th>
+                                    <th class="py-3 px-4">Leftover Queue</th>
+                                    <th class="py-3 px-4">Approx. Length</th>
+                                </tr>
+                            </thead>
+                            <tbody id="milestone-tbody" class="divide-y divide-slate-100 text-sm">
+                                <!-- Populated dynamically via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /**
+         * Shek Pai Street Traffic Bottleneck & Queueing Simulator
+         * Models single-lane two-way alternating signal control (TTA 92039/SLS/TTA/013-2)
+         */
+
+        // --- Engineering Constants ---
+        const STARTUP_LOST_TIME = 2.0;    // Seconds lost per green phase as drivers react & accelerate
+        const SATURATION_HEADWAY = 2.2;   // Seconds per vehicle once moving at steady flow (~1,636 vph saturation flow)
+        const AVG_VEHICLE_LENGTH = 6.5;   // Meters per queued vehicle (mix of cars, minibuses, double-deckers)
+        const SPILLBACK_METERS = 350;     // Distance where queue spills back into adjacent junctions
+
+        // --- Application State ---
+        const state = {
+            demand: 560,        // cars/hour wanting to enter estate
+            greenIn: 16,        // seconds green for Entering Estate
+            greenOut: 16,       // seconds green for Leaving Estate
+            greenSide: 8,       // seconds green for Lei Pui Street
+            allRed: 4           // seconds all-red clearance per phase transition (3 transitions per cycle)
+        };
+
+        // --- DOM References ---
+        const sliders = {
+            demand: document.getElementById('slider-demand'),
+            greenIn: document.getElementById('slider-green-in'),
+            greenOut: document.getElementById('slider-green-out'),
+            greenSide: document.getElementById('slider-green-side'),
+            allRed: document.getElementById('slider-all-red')
+        };
+
+        const labels = {
+            demand: document.getElementById('val-demand'),
+            greenIn: document.getElementById('val-green-in'),
+            greenOut: document.getElementById('val-green-out'),
+            greenSide: document.getElementById('val-green-side'),
+            allRed: document.getElementById('val-all-red')
+        };
+
+        // --- Core Traffic Engineering Calculations ---
+        function calculateMetrics() {
+            const { demand, greenIn, greenOut, greenSide, allRed } = state;
+
+            // 3 phases -> 3 all-red transitions per cycle
+            const totalAllRed = allRed * 3;
+            const cycleLength = greenIn + greenOut + greenSide + totalAllRed;
+            const cyclesPerHour = 3600 / cycleLength;
+            const wastedRedPct = (totalAllRed / cycleLength) * 100;
+
+            // Effective green time for Entering Estate
+            const effectiveGreenIn = Math.max(0, greenIn - STARTUP_LOST_TIME);
+            const carsPerGreen = effectiveGreenIn / SATURATION_HEADWAY;
+
+            // Total hourly capacity for Entering Estate
+            const capacity = carsPerGreen * cyclesPerHour;
+
+            // Net queue change (cars/hour and cars/minute)
+            const netHourlyChange = demand - capacity;
+            const netMinuteChange = netHourlyChange / 60;
+
+            // Queue after t minutes (clamped at 0 if undersaturated)
+            const getQueueAtMinute = (mins) => {
+                if (netMinuteChange <= 0) return 0;
+                return netMinuteChange * mins;
+            };
+
+            return {
+                cycleLength,
+                cyclesPerHour,
+                totalAllRed,
+                wastedRedPct,
+                effectiveGreenIn,
+                carsPerGreen,
+                capacity,
+                netHourlyChange,
+                netMinuteChange,
+                q15: getQueueAtMinute(15),
+                q30: getQueueAtMinute(30),
+                q45: getQueueAtMinute(45),
+                q60: getQueueAtMinute(60)
+            };
+        }
+
+        // --- Update UI & Charts ---
+        function updateUI() {
+            // Update slider value pills
+            labels.demand.textContent = `${state.demand} cars/hr`;
+            labels.greenIn.textContent = `${state.greenIn} sec`;
+            labels.greenOut.textContent = `${state.greenOut} sec`;
+            labels.greenSide.textContent = `${state.greenSide} sec`;
+            labels.allRed.textContent = `${state.allRed} sec`;
+
+            const m = calculateMetrics();
+
+            // Cycle badges & bars
+            document.getElementById('cycle-badge').textContent = `Cycle: ${m.cycleLength}s`;
+            document.getElementById('bar-total-sec').textContent = `${m.cycleLength}s`;
+            document.getElementById('bar-wasted-pct').textContent = `${m.wastedRedPct.toFixed(1)}% All-Red Dead Time`;
+            document.getElementById('explain-red-pct').textContent = `${m.wastedRedPct.toFixed(1)}%`;
+
+            // Update visual cycle bar segments
+            const pct = (sec) => `${(sec / m.cycleLength) * 100}%`;
+            document.getElementById('seg-in').style.width = pct(state.greenIn);
+            document.getElementById('seg-r1').style.width = pct(state.allRed);
+            document.getElementById('seg-out').style.width = pct(state.greenOut);
+            document.getElementById('seg-r2').style.width = pct(state.allRed);
+            document.getElementById('seg-side').style.width = pct(state.greenSide);
+            document.getElementById('seg-r3').style.width = pct(state.allRed);
+
+            // Update KPI cards
+            document.getElementById('kpi-cycle').textContent = `${m.cycleLength}s`;
+            document.getElementById('kpi-cycles-hr').textContent = `${m.cyclesPerHour.toFixed(1)} cycles / hour`;
+
+            document.getElementById('kpi-lost-sec').textContent = `${m.totalAllRed}s / cycle`;
+            document.getElementById('kpi-lost-pct').textContent = `${m.wastedRedPct.toFixed(1)}% of hour wasted`;
+
+            document.getElementById('kpi-capacity').textContent = `${Math.round(m.capacity)} cars/hr`;
+            document.getElementById('kpi-cars-cycle').textContent = `${m.carsPerGreen.toFixed(2)} cars / green`;
+
+            const q60Cars = Math.round(m.q60);
+            const q60Meters = Math.round(m.q60 * AVG_VEHICLE_LENGTH);
+            document.getElementById('kpi-queue-60').textContent = q60Cars > 0 ? `${q60Cars} cars` : `0 cars`;
+            document.getElementById('kpi-meters-60').textContent = q60Cars > 0 ? `~${q60Meters} meters long` : `Clears every cycle`;
+
+            // Update Status Banner
+            const banner = document.getElementById('status-banner');
+            const statusIcon = document.getElementById('status-icon');
+            const statusTitle = document.getElementById('status-title');
+            const statusDesc = document.getElementById('status-desc');
+            const bannerNetRate = document.getElementById('banner-net-rate');
+            const kpiQueue60 = document.getElementById('kpi-queue-60');
+            const kpiMeters60 = document.getElementById('kpi-meters-60');
+
+            if (m.netHourlyChange > 5) {
+                // Oversaturated (Jam)
+                banner.className = "rounded-xl p-4 sm:p-5 border transition-colors duration-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm bg-rose-50 border-rose-200 text-rose-950";
+                statusIcon.className = "p-2.5 rounded-lg bg-rose-600 text-white shrink-0 mt-0.5";
+                statusIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>`;
+                statusTitle.textContent = "Oversaturated Bottleneck: Endless Queue Forming";
+                statusDesc.textContent = `Demand (${state.demand} cars/hr) exceeds bottleneck capacity (${Math.round(m.capacity)} cars/hr). Every cycle leaves ${((m.netHourlyChange / m.cyclesPerHour)).toFixed(1)} cars behind.`;
+                bannerNetRate.textContent = `+${m.netMinuteChange.toFixed(2)} cars / min`;
+                bannerNetRate.className = "text-xl font-extrabold text-rose-600";
+                kpiQueue60.className = "text-2xl font-extrabold text-rose-600 mt-1";
+                kpiMeters60.className = "text-[11px] font-semibold text-rose-700 mt-1";
+            } else if (m.netHourlyChange > -25) {
+                // Near Capacity (Tight / Fragile)
+                banner.className = "rounded-xl p-4 sm:p-5 border transition-colors duration-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm bg-amber-50 border-amber-200 text-amber-950";
+                statusIcon.className = "p-2.5 rounded-lg bg-amber-500 text-white shrink-0 mt-0.5";
+                statusIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+                statusTitle.textContent = "Razor-Thin Margin: Vulnerable to Sudden Surges";
+                statusDesc.textContent = `Capacity (${Math.round(m.capacity)} cars/hr) barely matches demand (${state.demand} cars/hr). Traffic clears, but a single slow bus could trigger temporary backups.`;
+                bannerNetRate.textContent = m.netMinuteChange > 0 ? `+${m.netMinuteChange.toFixed(2)} cars / min` : `Balanced (0.00/min)`;
+                bannerNetRate.className = "text-xl font-extrabold text-amber-600";
+                kpiQueue60.className = "text-2xl font-extrabold text-amber-600 mt-1";
+                kpiMeters60.className = "text-[11px] font-semibold text-amber-700 mt-1";
+            } else {
+                // Undersaturated (Flowing Smoothly)
+                banner.className = "rounded-xl p-4 sm:p-5 border transition-colors duration-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm bg-emerald-50 border-emerald-200 text-emerald-950";
+                statusIcon.className = "p-2.5 rounded-lg bg-emerald-600 text-white shrink-0 mt-0.5";
+                statusIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+                statusTitle.textContent = "Healthy Flow: Queue Clears Every Green Light";
+                statusDesc.textContent = `Capacity (${Math.round(m.capacity)} cars/hr) comfortably exceeds demand (${state.demand} cars/hr) by ${Math.round(m.capacity - state.demand)} cars/hr. Waiting cars clear out every cycle.`;
+                bannerNetRate.textContent = `Clears (+${Math.round(m.capacity - state.demand)}/hr buffer)`;
+                bannerNetRate.className = "text-xl font-extrabold text-emerald-600";
+                kpiQueue60.className = "text-2xl font-extrabold text-emerald-600 mt-1";
+                kpiMeters60.className = "text-[11px] font-semibold text-emerald-700 mt-1";
+            }
+
+            // Update Milestone Table
+            const milestones = [15, 30, 45, 60];
+            const tbody = document.getElementById('milestone-tbody');
+            tbody.innerHTML = milestones.map(mins => {
+                const arrived = Math.round((state.demand / 60) * mins);
+                const maxCleared = Math.round((m.capacity / 60) * mins);
+                const actualCleared = Math.min(arrived, maxCleared);
+                const queueCars = Math.max(0, arrived - actualCleared);
+                const queueMeters = Math.round(queueCars * AVG_VEHICLE_LENGTH);
+                const isSpillback = queueMeters >= SPILLBACK_METERS;
+
+                return `
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3 px-4 font-semibold text-slate-900">${mins} mins</td>
+                        <td class="py-3 px-4 text-slate-600">${arrived} cars</td>
+                        <td class="py-3 px-4 text-slate-600">${actualCleared} cars</td>
+                        <td class="py-3 px-4 font-bold ${queueCars > 0 ? 'text-rose-600' : 'text-emerald-600'}">
+                            ${queueCars > 0 ? `${queueCars} cars` : '0 (Cleared)'}
+                        </td>
+                        <td class="py-3 px-4">
+                            ${queueCars > 0
+                                ? `<span class="inline-flex items-center gap-1.5 font-semibold ${isSpillback ? 'text-rose-700' : 'text-slate-700'}">
+                                    ~${queueMeters} m
+                                    ${isSpillback ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-rose-100 text-rose-800 border border-rose-200">Gridlock</span>' : ''}
+                                   </span>`
+                                : '<span class="text-slate-400">0 m</span>'
+                            }
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Redraw 60-min Projection Chart
+            drawChart(m);
+        }
+
+        // --- 60-Minute Queue Chart Renderer ---
+        const chartCanvas = document.getElementById('chart-canvas');
+        const chartCtx = chartCanvas.getContext('2d');
+
+        function drawChart(metrics) {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = chartCanvas.parentElement.getBoundingClientRect();
+            chartCanvas.width = rect.width * dpr;
+            chartCanvas.height = rect.height * dpr;
+            chartCtx.scale(dpr, dpr);
+
+            const w = rect.width;
+            const h = rect.height;
+            const pad = { top: 20, right: 24, bottom: 34, left: 52 };
+            const plotW = w - pad.left - pad.right;
+            const plotH = h - pad.top - pad.bottom;
+
+            chartCtx.clearRect(0, 0, w, h);
+
+            // Determine Y-Axis scale (minimum max of 150 cars so scale feels intuitive)
+            const maxQueue60 = Math.max(0, metrics.q60);
+            const yMax = Math.max(150, Math.ceil(maxQueue60 / 50) * 50);
+
+            // Draw Horizontal Gridlines & Y-Axis Labels
+            chartCtx.font = '11px Inter, sans-serif';
+            chartCtx.textAlign = 'right';
+            chartCtx.textBaseline = 'middle';
+
+            const steps = 5;
+            for (let i = 0; i <= steps; i++) {
+                const val = (yMax / steps) * i;
+                const y = pad.top + plotH - (i / steps) * plotH;
+
+                chartCtx.strokeStyle = i === 0 ? '#94a3b8' : '#e2e8f0';
+                chartCtx.lineWidth = 1;
+                chartCtx.beginPath();
+                chartCtx.moveTo(pad.left, y);
+                chartCtx.lineTo(pad.left + plotW, y);
+                chartCtx.stroke();
+
+                chartCtx.fillStyle = '#64748b';
+                chartCtx.fillText(`${Math.round(val)}`, pad.left - 8, y);
+            }
+
+            // Y-axis unit label
+            chartCtx.save();
+            chartCtx.translate(14, pad.top + plotH / 2);
+            chartCtx.rotate(-Math.PI / 2);
+            chartCtx.textAlign = 'center';
+            chartCtx.fillStyle = '#475569';
+            chartCtx.font = '600 11px Inter, sans-serif';
+            chartCtx.fillText('Queued Cars', 0, 0);
+            chartCtx.restore();
+
+            // Draw Spillback Threshold Line (~350m = ~54 cars)
+            const spillbackCars = SPILLBACK_METERS / AVG_VEHICLE_LENGTH;
+            if (spillbackCars <= yMax) {
+                const spillY = pad.top + plotH - (spillbackCars / yMax) * plotH;
+                chartCtx.save();
+                chartCtx.strokeStyle = '#f59e0b';
+                chartCtx.lineWidth = 1.5;
+                chartCtx.setLineDash([5, 5]);
+                chartCtx.beginPath();
+                chartCtx.moveTo(pad.left, spillY);
+                chartCtx.lineTo(pad.left + plotW, spillY);
+                chartCtx.stroke();
+                chartCtx.restore();
+            }
+
+            // Draw X-Axis Labels (0, 15, 30, 45, 60 mins)
+            chartCtx.textAlign = 'center';
+            chartCtx.textBaseline = 'top';
+            [0, 15, 30, 45, 60].forEach(min => {
+                const x = pad.left + (min / 60) * plotW;
+                chartCtx.fillStyle = '#64748b';
+                chartCtx.fillText(`${min}m`, x, pad.top + plotH + 8);
+            });
+
+            // Build Data Points (including sawtooth micro-cycles if undersaturated so user sees cars clearing!)
+            const points = [];
+            const totalSamples = 120;
+            const cycleMins = metrics.cycleLength / 60;
+            const arrivalsPerCycle = (state.demand / 60) * cycleMins;
+
+            for (let i = 0; i <= totalSamples; i++) {
+                const min = (i / totalSamples) * 60;
+                let q = 0;
+                if (metrics.netMinuteChange > 0) {
+                    // Growing queue + small cycle oscillation
+                    const cyclePos = (min % cycleMins) / cycleMins;
+                    const redFraction = 1 - (state.greenIn / metrics.cycleLength);
+                    const wave = cyclePos < redFraction
+                        ? (cyclePos / redFraction) * arrivalsPerCycle
+                        : (1 - (cyclePos - redFraction) / (1 - redFraction)) * arrivalsPerCycle;
+                    q = metrics.netMinuteChange * min + wave * 0.4;
+                } else {
+                    // Undersaturated: queue builds during red light, clears to 0 during green light
+                    const cyclePos = (min % cycleMins) / cycleMins;
+                    const redFraction = 1 - (state.greenIn / metrics.cycleLength);
+                    if (cyclePos < redFraction) {
+                        q = (cyclePos / redFraction) * arrivalsPerCycle;
+                    } else {
+                        const clearProgress = (cyclePos - redFraction) / (1 - redFraction);
+                        const clearRateRatio = metrics.capacity / Math.max(1, state.demand);
+                        q = Math.max(0, arrivalsPerCycle * (1 - clearProgress * clearRateRatio));
+                    }
+                }
+                points.push({ min, q });
+            }
+
+            // Fill Gradient under curve
+            const isJam = metrics.netMinuteChange > 5;
+            const grad = chartCtx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+            if (isJam) {
+                grad.addColorStop(0, 'rgba(225, 29, 72, 0.28)');
+                grad.addColorStop(1, 'rgba(225, 29, 72, 0.02)');
+            } else {
+                grad.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
+                grad.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
+            }
+
+            chartCtx.beginPath();
+            points.forEach((pt, idx) => {
+                const x = pad.left + (pt.min / 60) * plotW;
+                const y = pad.top + plotH - (Math.min(yMax, pt.q) / yMax) * plotH;
+                if (idx === 0) chartCtx.moveTo(x, y);
+                else chartCtx.lineTo(x, y);
+            });
+            chartCtx.lineTo(pad.left + plotW, pad.top + plotH);
+            chartCtx.lineTo(pad.left, pad.top + plotH);
+            chartCtx.closePath();
+            chartCtx.fillStyle = grad;
+            chartCtx.fill();
+
+            // Stroke Line
+            chartCtx.beginPath();
+            points.forEach((pt, idx) => {
+                const x = pad.left + (pt.min / 60) * plotW;
+                const y = pad.top + plotH - (Math.min(yMax, pt.q) / yMax) * plotH;
+                if (idx === 0) chartCtx.moveTo(x, y);
+                else chartCtx.lineTo(x, y);
+            });
+            chartCtx.strokeStyle = isJam ? '#e11d48' : '#10b981';
+            chartCtx.lineWidth = 2.5;
+            chartCtx.stroke();
+
+            // Draw Milestone Dots at 15, 30, 45, 60m
+            [15, 30, 45, 60].forEach(min => {
+                const x = pad.left + (min / 60) * plotW;
+                const qVal = metrics.netMinuteChange > 0 ? metrics.netMinuteChange * min : 0;
+                const y = pad.top + plotH - (Math.min(yMax, qVal) / yMax) * plotH;
+
+                chartCtx.beginPath();
+                chartCtx.arc(x, y, 4.5, 0, Math.PI * 2);
+                chartCtx.fillStyle = '#ffffff';
+                chartCtx.fill();
+                chartCtx.lineWidth = 2.5;
+                chartCtx.strokeStyle = isJam ? '#e11d48' : '#10b981';
+                chartCtx.stroke();
+            });
+        }
+
+        // --- Live Micro-Simulation Animation (26m Single-Lane Bottleneck) ---
+        const simCanvas = document.getElementById('bottleneck-canvas');
+        const simCtx = simCanvas.getContext('2d');
+        const simPhaseBadge = document.getElementById('sim-phase-badge');
+
+        const sim = {
+            clock: 0,
+            spawnTimerIn: 0,
+            spawnTimerOut: 0,
+            spawnTimerSide: 0,
+            cars: [], // { dir: 'in'|'out'|'side', x, y, speed, color, length, passedBottleneck }
+            greenElapsed: 0,
+            lastPhase: ''
+        };
+
+        function resetSimulation() {
+            sim.clock = 0;
+            sim.spawnTimerIn = 0;
+            sim.spawnTimerOut = 0;
+            sim.spawnTimerSide = 0;
+            sim.cars = [];
+            sim.greenElapsed = 0;
+            // Pre-populate a few cars so screen isn't empty on start
+            for (let i = 0; i < 4; i++) {
+                sim.cars.push({
+                    dir: 'in',
+                    x: 180 - i * 34,
+                    y: 0,
+                    speed: 0,
+                    color: i % 3 === 0 ? '#ef4444' : '#38bdf8', // Red taxi or blue car
+                    length: 22,
+                    passed: false
+                });
+            }
+        }
+
+        function getCurrentSignalPhase(cycleTime) {
+            const { greenIn, greenOut, greenSide, allRed } = state;
+            let t = cycleTime;
+
+            if (t < greenIn) return { phase: 'IN_GREEN', label: 'ENTERING ESTATE: GREEN', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300', timeLeft: Math.ceil(greenIn - t) };
+            t -= greenIn;
+            if (t < allRed) return { phase: 'ALL_RED_1', label: `ALL-RED CLEARANCE (${Math.ceil(allRed - t)}s)`, badgeClass: 'bg-rose-100 text-rose-800 border-rose-300', timeLeft: Math.ceil(allRed - t) };
+            t -= allRed;
+            if (t < greenOut) return { phase: 'OUT_GREEN', label: 'LEAVING ESTATE: GREEN', badgeClass: 'bg-sky-100 text-sky-800 border-sky-300', timeLeft: Math.ceil(greenOut - t) };
+            t -= greenOut;
+            if (t < allRed) return { phase: 'ALL_RED_2', label: `ALL-RED CLEARANCE (${Math.ceil(allRed - t)}s)`, badgeClass: 'bg-rose-100 text-rose-800 border-rose-300', timeLeft: Math.ceil(allRed - t) };
+            t -= allRed;
+            if (t < greenSide) return { phase: 'SIDE_GREEN', label: 'LEI PUI ST: GREEN', badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300', timeLeft: Math.ceil(greenSide - t) };
+            t -= greenSide;
+            return { phase: 'ALL_RED_3', label: `ALL-RED CLEARANCE (${Math.ceil(allRed - t)}s)`, badgeClass: 'bg-rose-100 text-rose-800 border-rose-300', timeLeft: Math.ceil(allRed - t) };
+        }
+
+        let lastFrameTime = performance.now();
+
+        function animateSimulation(now) {
+            const rawDt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+
+            // Run simulation at 4x real-time speed so users can observe multiple cycles quickly
+            const simSpeed = 4.0;
+            const dt = rawDt * simSpeed;
+
+            const dpr = window.devicePixelRatio || 1;
+            const rect = simCanvas.parentElement.getBoundingClientRect();
+            if (simCanvas.width !== Math.floor(rect.width * dpr) || simCanvas.height !== Math.floor(rect.height * dpr)) {
+                simCanvas.width = rect.width * dpr;
+                simCanvas.height = rect.height * dpr;
+            }
+
+            simCtx.save();
+            simCtx.scale(dpr, dpr);
+
+            const w = rect.width;
+            const h = rect.height;
+
+            // Geometry coordinates
+            const roadCenterY = h * 0.56;
+            const laneHeight = 28;
+            const workZoneStart = w * 0.36;
+            const workZoneEnd = w * 0.64;
+            const stopLineIn = workZoneStart - 16;
+            const stopLineOut = workZoneEnd + 16;
+
+            // Advance signal clock
+            const totalCycle = state.greenIn + state.greenOut + state.greenSide + state.allRed * 3;
+            sim.clock = (sim.clock + dt) % totalCycle;
+            const sig = getCurrentSignalPhase(sim.clock);
+
+            if (sig.phase !== sim.lastPhase) {
+                sim.lastPhase = sig.phase;
+                sim.greenElapsed = 0;
+                simPhaseBadge.textContent = sig.label;
+                simPhaseBadge.className = `px-2.5 py-1 rounded-md text-xs font-bold border ${sig.badgeClass}`;
+            } else {
+                if (sig.phase.includes('GREEN')) {
+                    sim.greenElapsed += dt;
+                }
+                if (sig.phase.startsWith('ALL_RED')) {
+                    simPhaseBadge.textContent = sig.label;
+                }
+            }
+
+            // Spawn Inbound Cars according to demand slider
+            const arrivalIntervalIn = 3600 / state.demand;
+            sim.spawnTimerIn += dt;
+            if (sim.spawnTimerIn >= arrivalIntervalIn) {
+                sim.spawnTimerIn -= arrivalIntervalIn;
+                const inCars = sim.cars.filter(c => c.dir === 'in');
+                const lastIn = inCars.length > 0 ? inCars[inCars.length - 1] : null;
+                if (!lastIn || lastIn.x > 25) {
+                    const isBus = Math.random() < 0.18;
+                    const isTaxi = !isBus && Math.random() < 0.25;
+                    sim.cars.push({
+                        dir: 'in',
+                        x: -30,
+                        y: roadCenterY + laneHeight * 0.5,
+                        speed: 0,
+                        color: isBus ? '#f59e0b' : (isTaxi ? '#ef4444' : '#38bdf8'),
+                        length: isBus ? 34 : 22,
+                        passed: false
+                    });
+                }
+            }
+
+            // Spawn Outbound Cars (steady background flow ~280 cars/hr)
+            sim.spawnTimerOut += dt;
+            if (sim.spawnTimerOut >= 12.5) {
+                sim.spawnTimerOut = 0;
+                const outCars = sim.cars.filter(c => c.dir === 'out');
+                const lastOut = outCars.length > 0 ? outCars[outCars.length - 1] : null;
+                if (!lastOut || lastOut.x < w - 25) {
+                    sim.cars.push({
+                        dir: 'out',
+                        x: w + 30,
+                        y: roadCenterY - laneHeight * 0.5,
+                        speed: 0,
+                        color: Math.random() < 0.3 ? '#ef4444' : '#a7f3d0',
+                        length: 22,
+                        passed: false
+                    });
+                }
+            }
+
+            // Spawn Side Street Cars (~140 cars/hr)
+            sim.spawnTimerSide += dt;
+            if (sim.spawnTimerSide >= 24) {
+                sim.spawnTimerSide = 0;
+                const sideCars = sim.cars.filter(c => c.dir === 'side');
+                if (sideCars.length < 3) {
+                    sim.cars.push({
+                        dir: 'side',
+                        x: workZoneStart - 38,
+                        y: -20 - sideCars.length * 32,
+                        speed: 0,
+                        color: '#c084fc',
+                        length: 20,
+                        passed: false
+                    });
+                }
+            }
+
+            // --- Draw Background & Road Geometry ---
+            simCtx.fillStyle = '#1e293b';
+            simCtx.fillRect(0, 0, w, h);
+
+            // Side street (Lei Pui Street) vertical road
+            const sideRoadX = workZoneStart - 38;
+            simCtx.fillStyle = '#334155';
+            simCtx.fillRect(sideRoadX - 18, 0, 36, roadCenterY);
+
+            // Main Two-Way Road (Shek Pai Street)
+            simCtx.fillStyle = '#334155';
+            simCtx.fillRect(0, roadCenterY - laneHeight, w, laneHeight * 2);
+
+            // Center dashed divider outside work zone
+            simCtx.strokeStyle = '#94a3b8';
+            simCtx.lineWidth = 1.5;
+            simCtx.setLineDash([10, 10]);
+            simCtx.beginPath();
+            simCtx.moveTo(0, roadCenterY);
+            simCtx.lineTo(stopLineIn - 10, roadCenterY);
+            simCtx.moveTo(stopLineOut + 10, roadCenterY);
+            simCtx.lineTo(w, roadCenterY);
+            simCtx.stroke();
+            simCtx.setLineDash([]);
+
+            // Construction Work Zone Box (26m Single-Lane Bottleneck)
+            simCtx.fillStyle = 'rgba(245, 158, 11, 0.16)';
+            simCtx.fillRect(workZoneStart, roadCenterY - laneHeight, workZoneEnd - workZoneStart, laneHeight);
+
+            simCtx.strokeStyle = '#f59e0b';
+            simCtx.lineWidth = 2;
+            simCtx.strokeRect(workZoneStart + 1, roadCenterY - laneHeight + 1, workZoneEnd - workZoneStart - 2, laneHeight - 2);
+
+            // Diagonal hazard stripes inside work zone
+            simCtx.save();
+            simCtx.beginPath();
+            simCtx.rect(workZoneStart, roadCenterY - laneHeight, workZoneEnd - workZoneStart, laneHeight);
+            simCtx.clip();
+            simCtx.strokeStyle = 'rgba(245, 158, 11, 0.35)';
+            simCtx.lineWidth = 3;
+            for (let sx = workZoneStart - 30; sx < workZoneEnd + 30; sx += 14) {
+                simCtx.beginPath();
+                simCtx.moveTo(sx, roadCenterY - laneHeight);
+                simCtx.lineTo(sx + 20, roadCenterY);
+                simCtx.stroke();
+            }
+            simCtx.restore();
+
+            // Work Zone Label
+            simCtx.fillStyle = '#fbbf24';
+            simCtx.font = 'bold 10px Inter, sans-serif';
+            simCtx.textAlign = 'center';
+            simCtx.fillText('ROADWORKS (26m SINGLE LANE)', (workZoneStart + workZoneEnd) / 2, roadCenterY - laneHeight - 8);
+
+            // Direction Labels
+            simCtx.fillStyle = '#94a3b8';
+            simCtx.font = '600 11px Inter, sans-serif';
+            simCtx.textAlign = 'left';
+            simCtx.fillText('← Queue Builds Up Here', 12, roadCenterY + laneHeight + 18);
+            simCtx.textAlign = 'right';
+            simCtx.fillText('Entering Shek Lei Estate →', w - 12, roadCenterY + laneHeight + 18);
+            simCtx.textAlign = 'center';
+            simCtx.fillText('Lei Pui St', sideRoadX, 16);
+
+            // Stop Lines
+            simCtx.strokeStyle = '#ffffff';
+            simCtx.lineWidth = 3;
+            // Inbound stop line
+            simCtx.beginPath();
+            simCtx.moveTo(stopLineIn, roadCenterY + 2);
+            simCtx.lineTo(stopLineIn, roadCenterY + laneHeight - 2);
+            simCtx.stroke();
+            // Outbound stop line
+            simCtx.beginPath();
+            simCtx.moveTo(stopLineOut, roadCenterY - laneHeight + 2);
+            simCtx.lineTo(stopLineOut, roadCenterY - 2);
+            simCtx.stroke();
+
+            // Traffic Signal Heads
+            const drawSignal = (x, y, isGreen) => {
+                simCtx.fillStyle = '#0f172a';
+                simCtx.beginPath();
+                simCtx.roundRect(x - 7, y - 13, 14, 26, 4);
+                simCtx.fill();
+                simCtx.strokeStyle = '#475569';
+                simCtx.lineWidth = 1;
+                simCtx.stroke();
+
+                // Red light
+                simCtx.beginPath();
+                simCtx.arc(x, y - 6, 4, 0, Math.PI * 2);
+                simCtx.fillStyle = !isGreen ? '#ef4444' : '#450a0a';
+                simCtx.fill();
+
+                // Green light
+                simCtx.beginPath();
+                simCtx.arc(x, y + 6, 4, 0, Math.PI * 2);
+                simCtx.fillStyle = isGreen ? '#10b981' : '#064e3b';
+                simCtx.fill();
+            };
+
+            drawSignal(stopLineIn, roadCenterY + laneHeight + 16, sig.phase === 'IN_GREEN');
+            drawSignal(stopLineOut, roadCenterY - laneHeight - 16, sig.phase === 'OUT_GREEN');
+            drawSignal(sideRoadX - 26, roadCenterY - laneHeight - 14, sig.phase === 'SIDE_GREEN');
+
+            // --- Update & Render Vehicles ---
+            const maxSpeed = 72; // pixels/sec (~2.2s headway spacing at steady flow)
+            const startupReady = sim.greenElapsed >= STARTUP_LOST_TIME * 0.65;
+
+            // 1. Update Inbound Cars
+            const inCars = sim.cars.filter(c => c.dir === 'in');
+            for (let i = 0; i < inCars.length; i++) {
+                const car = inCars[i];
+                car.y = roadCenterY + laneHeight * 0.5;
+                let targetSpeed = maxSpeed;
+
+                // Stop at red light if before stop line
+                const frontX = car.x + car.length / 2;
+                if (frontX <= stopLineIn + 2) {
+                    if (sig.phase !== 'IN_GREEN' || !startupReady) {
+                        const distToStop = stopLineIn - frontX;
+                        if (distToStop < 45) {
+                            targetSpeed = Math.max(0, (distToStop / 45) * maxSpeed * 0.7);
+                            if (distToStop <= 2) targetSpeed = 0;
+                        }
+                    }
+                }
+
+                // Keep safe distance from car ahead
+                if (i > 0) {
+                    const ahead = inCars[i - 1];
+                    const gap = (ahead.x - ahead.length / 2) - (car.x + car.length / 2);
+                    const minGap = 10;
+                    if (gap < minGap + 35) {
+                        targetSpeed = Math.min(targetSpeed, Math.max(0, ((gap - minGap) / 35) * maxSpeed));
+                        if (gap <= minGap) targetSpeed = 0;
+                    }
+                }
+
+                car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 6);
+                car.x += car.speed * dt;
+            }
+
+            // 2. Update Outbound Cars (shift down into single open lane through workzone)
+            const outCars = sim.cars.filter(c => c.dir === 'out');
+            for (let i = 0; i < outCars.length; i++) {
+                const car = outCars[i];
+                let targetSpeed = maxSpeed;
+                const frontX = car.x - car.length / 2;
+
+                if (frontX >= stopLineOut - 2) {
+                    if (sig.phase !== 'OUT_GREEN' || !startupReady) {
+                        const distToStop = frontX - stopLineOut;
+                        if (distToStop < 45) {
+                            targetSpeed = Math.max(0, (distToStop / 45) * maxSpeed * 0.7);
+                            if (distToStop <= 2) targetSpeed = 0;
+                        }
+                    }
+                }
+
+                if (i > 0) {
+                    const ahead = outCars[i - 1];
+                    const gap = (car.x - car.length / 2) - (ahead.x + ahead.length / 2);
+                    const minGap = 10;
+                    if (gap < minGap + 35) {
+                        targetSpeed = Math.min(targetSpeed, Math.max(0, ((gap - minGap) / 35) * maxSpeed));
+                        if (gap <= minGap) targetSpeed = 0;
+                    }
+                }
+
+                car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 6);
+                car.x -= car.speed * dt;
+
+                // Smoothly merge into bottom lane when traversing single-lane workzone
+                if (car.x < stopLineOut + 15 && car.x > stopLineIn - 15) {
+                    car.y += ((roadCenterY + laneHeight * 0.5) - car.y) * Math.min(1, dt * 8);
+                } else {
+                    car.y += ((roadCenterY - laneHeight * 0.5) - car.y) * Math.min(1, dt * 8);
+                }
+            }
+
+            // 3. Update Side-Street Cars (Lei Pui St -> turns right into single lane)
+            const sideCars = sim.cars.filter(c => c.dir === 'side');
+            for (let i = 0; i < sideCars.length; i++) {
+                const car = sideCars[i];
+                if (!car.passed) {
+                    let targetSpeed = maxSpeed * 0.85;
+                    const stopY = roadCenterY - laneHeight - 6;
+                    if (sig.phase !== 'SIDE_GREEN' || !startupReady) {
+                        const dist = stopY - car.y;
+                        if (dist < 40) {
+                            targetSpeed = dist <= 2 ? 0 : (dist / 40) * maxSpeed * 0.5;
+                        }
+                    }
+                    if (i > 0 && !sideCars[i - 1].passed) {
+                        const gap = (sideCars[i - 1].y - 26) - car.y;
+                        if (gap < 25) targetSpeed = gap <= 2 ? 0 : Math.min(targetSpeed, gap * 2);
+                    }
+                    car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 6);
+                    car.y += car.speed * dt;
+
+                    if (car.y >= roadCenterY + laneHeight * 0.5) {
+                        car.y = roadCenterY + laneHeight * 0.5;
+                        car.passed = true;
+                    }
+                } else {
+                    // Drive eastbound through bottleneck
+                    car.x += maxSpeed * dt;
+                }
+            }
+
+            // Draw All Vehicles
+            sim.cars.forEach(car => {
+                simCtx.save();
+                simCtx.translate(car.x, car.y);
+                if (car.dir === 'side' && !car.passed) {
+                    simCtx.rotate(Math.PI / 2);
+                }
+                // Car body
+                simCtx.fillStyle = car.color;
+                simCtx.beginPath();
+                simCtx.roundRect(-car.length / 2, -7, car.length, 14, 4);
+                simCtx.fill();
+
+                // Windshield highlight
+                simCtx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+                const wsOffset = car.dir === 'out' ? -car.length / 2 + 4 : car.length / 2 - 8;
+                simCtx.fillRect(wsOffset, -5, 4, 10);
+                simCtx.restore();
+            });
+
+            // Clean up exited cars
+            sim.cars = sim.cars.filter(c => {
+                if (c.dir === 'in') return c.x < w + 60;
+                if (c.dir === 'out') return c.x > -60;
+                if (c.dir === 'side') return c.x < w + 60;
+                return false;
+            });
+
+            // Queue Counter Overlay inside Canvas
+            const queuedInCount = inCars.filter(c => c.x < stopLineIn && c.speed < 8).length;
+            simCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            simCtx.beginPath();
+            simCtx.roundRect(10, 10, 175, 28, 6);
+            simCtx.fill();
+            simCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+            simCtx.stroke();
+
+            simCtx.fillStyle = queuedInCount >= 6 ? '#fb7185' : '#e2e8f0';
+            simCtx.font = '600 11px Inter, sans-serif';
+            simCtx.textAlign = 'left';
+            simCtx.fillText(`Visible Waiting Queue: ${queuedInCount} cars`, 20, 28);
+
+            simCtx.restore();
+            requestAnimationFrame(animateSimulation);
+        }
+
+        // --- Event Listeners ---
+        Object.keys(sliders).forEach(key => {
+            sliders[key].addEventListener('input', (e) => {
+                state[key] = parseInt(e.target.value, 10);
+                updateUI();
+            });
+        });
+
+        // Preset 1: Default Plan (Jam)
+        document.getElementById('btn-preset-default').addEventListener('click', () => {
+            state.demand = 560;
+            state.greenIn = 16;
+            state.greenOut = 16;
+            state.greenSide = 8;
+            state.allRed = 4;
+            syncSliders();
+            updateUI();
+        });
+
+        // Preset 2: Optimized Peak Plan (Clear)
+        document.getElementById('btn-preset-optimized').addEventListener('click', () => {
+            state.demand = 560;
+            state.greenIn = 23;
+            state.greenOut = 15;
+            state.greenSide = 7;
+            state.allRed = 4;
+            syncSliders();
+            updateUI();
+        });
+
+        // Preset 3: Longer Cycle (90s) Efficiency
+        document.getElementById('btn-preset-long').addEventListener('click', () => {
+            state.demand = 560;
+            state.greenIn = 36;
+            state.greenOut = 28;
+            state.greenSide = 14;
+            state.allRed = 4;
+            syncSliders();
+            updateUI();
+        });
+
+        document.getElementById('btn-reset-sim').addEventListener('click', resetSimulation);
+
+        function syncSliders() {
+            Object.keys(sliders).forEach(key => {
+                sliders[key].value = state[key];
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            updateUI();
+        });
+
+        // --- Initialize App ---
+        window.onload = function () {
+            resetSimulation();
+            updateUI();
+            requestAnimationFrame(animateSimulation);
+        };
+    </script>
+</body>
+</html>
